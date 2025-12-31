@@ -4,6 +4,9 @@
 //! allowing you to embed WPE WebViews in winit windows.
 
 #[cfg(feature = "winit")]
+use std::sync::Arc;
+
+#[cfg(feature = "winit")]
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 #[cfg(feature = "winit")]
 use winit::{
@@ -13,7 +16,7 @@ use winit::{
     window::{Window, WindowAttributes, WindowId},
 };
 
-use crate::{Error, IpcBridge, Result, WebView, WebViewSettings};
+use crate::{Error, IpcBridge, Result, SoftwareRenderer, WebView, WebViewSettings};
 
 /// A custom event type for the winit event loop.
 #[derive(Debug, Clone)]
@@ -27,8 +30,9 @@ pub enum WpeEvent {
 /// A window containing a WPE WebView.
 #[cfg(feature = "winit")]
 pub struct WpeWindow {
-    window: Option<Window>,
+    window: Option<Arc<Window>>,
     webview: Option<WebView>,
+    renderer: Option<SoftwareRenderer>,
     ipc: IpcBridge,
     settings: WebViewSettings,
     ready: bool,
@@ -42,6 +46,7 @@ impl WpeWindow {
         Self {
             window: None,
             webview: None,
+            renderer: None,
             ipc: IpcBridge::new(),
             settings,
             ready: false,
@@ -50,8 +55,14 @@ impl WpeWindow {
 
     /// Get a reference to the window.
     #[must_use]
-    pub fn window(&self) -> Option<&Window> {
+    pub fn window(&self) -> Option<&Arc<Window>> {
         self.window.as_ref()
+    }
+
+    /// Get a mutable reference to the renderer.
+    #[must_use]
+    pub fn renderer_mut(&mut self) -> Option<&mut SoftwareRenderer> {
+        self.renderer.as_mut()
     }
 
     /// Get a reference to the webview.
@@ -90,13 +101,18 @@ impl WpeWindow {
             .with_title("WPE WebView")
             .with_inner_size(winit::dpi::LogicalSize::new(1280, 720));
 
-        let window = event_loop
-            .create_window(attrs)
-            .map_err(|_| Error::WebViewCreationFailed)?;
+        let window = Arc::new(
+            event_loop
+                .create_window(attrs)
+                .map_err(|_| Error::WebViewCreationFailed)?,
+        );
 
         // Get the raw window handle for WPE
         let _display_handle = window.display_handle().map_err(|_| Error::WindowHandle)?;
         let _window_handle = window.window_handle().map_err(|_| Error::WindowHandle)?;
+
+        // Create the software renderer
+        let renderer = SoftwareRenderer::new(window.clone())?;
 
         // Create the webview
         let mut webview = WebView::new(self.settings.clone())?;
@@ -110,6 +126,7 @@ impl WpeWindow {
         }
 
         self.window = Some(window);
+        self.renderer = Some(renderer);
         self.webview = Some(webview);
         self.ready = true;
 
@@ -126,12 +143,29 @@ impl WpeWindow {
                 if let Some(ref mut webview) = self.webview {
                     webview.resize(size.width, size.height);
                 }
+                if let Some(ref mut renderer) = self.renderer {
+                    renderer.resize(size.width, size.height);
+                }
             }
             WindowEvent::RedrawRequested => {
+                // Process WPE events
                 if let Some(ref mut webview) = self.webview {
                     webview.spin();
                     webview.render();
                 }
+
+                // Present the frame
+                if let Some(ref mut renderer) = self.renderer {
+                    // For now, fill with a test color to verify rendering works
+                    // Later this will be replaced with actual WPE buffer content
+                    renderer.fill(0xFF2D2D2D); // Dark gray background
+
+                    if let Err(e) = renderer.present() {
+                        tracing::error!("Failed to present frame: {}", e);
+                    }
+                }
+
+                // Request next frame
                 if let Some(ref window) = self.window {
                     window.request_redraw();
                 }

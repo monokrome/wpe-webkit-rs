@@ -11,6 +11,12 @@ pub enum Error {
     #[error("Failed to create backend")]
     BackendCreationFailed,
 
+    #[error("Failed to create renderer: {0}")]
+    RendererCreationFailed(String),
+
+    #[error("Render failed: {0}")]
+    RenderFailed(String),
+
     #[error("Invalid URL: {0}")]
     InvalidUrl(String),
 

@@ -42,11 +42,15 @@ pub mod ipc;
 pub mod webview;
 
 #[cfg(feature = "winit")]
+pub mod renderer;
+#[cfg(feature = "winit")]
 pub mod window;
 
 pub use error::{Error, Result};
 pub use ipc::{BackendMessage, FrontendMessage, IpcBridge};
 pub use webview::{initialize, WebView, WebViewSettings};
 
+#[cfg(feature = "winit")]
+pub use renderer::{RenderContext, SoftwareRenderer};
 #[cfg(feature = "winit")]
 pub use window::{WpeApp, WpeEvent, WpeWindow};

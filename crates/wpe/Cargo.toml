@@ -9,7 +9,7 @@ description = "Safe Rust bindings for WPE WebKit - GTK-free embedded web views"
 
 [features]
 default = ["winit"]
-winit = ["dep:winit", "dep:raw-window-handle"]
+winit = ["dep:winit", "dep:raw-window-handle", "dep:softbuffer"]
 
 [dependencies]
 wpe-sys.workspace = true
@@ -21,6 +21,7 @@ serde_json.workspace = true
 # Optional winit integration
 winit = { workspace = true, optional = true }
 raw-window-handle = { workspace = true, optional = true }
+softbuffer = { workspace = true, optional = true }
 
 [dev-dependencies]
 tokio.workspace = true

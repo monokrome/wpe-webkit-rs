@@ -19,6 +19,7 @@ wpe-sys = { path = "crates/wpe-sys" }
 # Windowing
 winit = "0.30"
 raw-window-handle = "0.6"
+softbuffer = "0.4"
 
 # Async
 tokio = { version = "1", features = ["full"] }
