@@ -1,7 +1,7 @@
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 
-use crate::{Error, Result, WebView};
+use crate::{Result, WebView};
 
 /// JavaScript bridge code injected into web pages.
 pub const JS_BRIDGE: &str = r#"
@@ -167,7 +167,7 @@ impl IpcBridge {
     /// Poll for pending messages from the frontend.
     ///
     /// This should be called in your event loop to receive messages.
-    pub fn poll(&mut self, webview: &WebView) -> Vec<FrontendMessage> {
+    pub fn poll(&mut self, _webview: &WebView) -> Vec<FrontendMessage> {
         // TODO: Call window.__wpe_poll() and parse the result
         // For now, drain the internal queue
         self.pending_messages.drain(..).collect()

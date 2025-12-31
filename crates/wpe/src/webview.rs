@@ -1,4 +1,4 @@
-use std::ffi::{CStr, CString};
+use std::ffi::CString;
 use std::ptr;
 use std::sync::Once;
 
@@ -11,17 +11,17 @@ static mut INITIALIZED: bool = false;
 ///
 /// # Safety
 /// This function initializes global state and should only be called once.
+#[allow(unsafe_code)]
 pub fn initialize() -> Result<()> {
     INIT.call_once(|| {
+        // SAFETY: wpe_loader_init is safe to call once at startup
         unsafe {
             // Initialize the FDO backend
-            // In a real implementation, we'd get the EGL display from the window system
-            // For now, we'll use the default initialization
             let result = wpe_sys::wpe_loader_init(
-                b"libWPEBackend-fdo-1.0.so\0".as_ptr().cast(),
+                c"libWPEBackend-fdo-1.0.so".as_ptr(),
             );
 
-            INITIALIZED = result != 0;
+            INITIALIZED = result;
 
             if INITIALIZED {
                 tracing::info!("WPE backend initialized successfully");
@@ -31,6 +31,7 @@ pub fn initialize() -> Result<()> {
         }
     });
 
+    // SAFETY: INITIALIZED is only written once inside call_once
     unsafe {
         if INITIALIZED {
             Ok(())
@@ -95,6 +96,7 @@ impl WebViewSettings {
 /// A WPE WebKit web view.
 ///
 /// This provides a GTK-free web view that can be embedded in any window.
+#[allow(dead_code)]
 pub struct WebView {
     // These will hold the raw pointers to WPE objects
     // For now, we're creating a skeleton that compiles

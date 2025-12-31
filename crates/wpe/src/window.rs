@@ -177,7 +177,6 @@ where
         let mut app = WpeAppHandler {
             wpe_window: WpeWindow::new(self.settings),
             message_handler: self.message_handler,
-            should_exit: false,
         };
 
         event_loop.run_app(&mut app).map_err(|_| Error::InitFailed)?;
@@ -193,7 +192,6 @@ where
 {
     wpe_window: WpeWindow,
     message_handler: F,
-    should_exit: bool,
 }
 
 #[cfg(feature = "winit")]
@@ -232,13 +230,19 @@ where
         event: WindowEvent,
     ) {
         // Process IPC messages before handling events
-        if let Some(ref webview) = self.wpe_window.webview {
-            let messages = self.wpe_window.ipc.poll(webview);
-            for msg in messages {
-                if let Some(result) = (self.message_handler)(&mut self.wpe_window, &msg) {
-                    if let Some(request_id) = &msg.request_id {
-                        let response =
-                            crate::ipc::BackendMessage::response(request_id.clone(), result);
+        // Borrow ipc and webview separately to satisfy borrow checker
+        let messages: Vec<_> = if let Some(ref webview) = self.wpe_window.webview {
+            self.wpe_window.ipc.poll(webview)
+        } else {
+            vec![]
+        };
+
+        for msg in messages {
+            if let Some(result) = (self.message_handler)(&mut self.wpe_window, &msg) {
+                if let Some(request_id) = &msg.request_id {
+                    let response =
+                        crate::ipc::BackendMessage::response(request_id.clone(), result);
+                    if let Some(ref webview) = self.wpe_window.webview {
                         let _ = self.wpe_window.ipc.send(webview, &response);
                     }
                 }
