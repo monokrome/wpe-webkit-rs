@@ -251,3 +251,58 @@ impl Drop for WebView {
 
 // WebView is not thread-safe (WPE uses GLib main loop)
 // We intentionally don't implement Send/Sync
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_wpe_version() {
+        // SAFETY: These are simple version getter functions
+        unsafe {
+            let major = wpe_sys::wpe_get_major_version();
+            let minor = wpe_sys::wpe_get_minor_version();
+            let micro = wpe_sys::wpe_get_micro_version();
+
+            // WPE should be version 1.x or 2.x
+            assert!(major >= 1, "WPE major version should be >= 1, got {}", major);
+            println!("WPE version: {}.{}.{}", major, minor, micro);
+        }
+    }
+
+    #[test]
+    fn test_wpe_fdo_version() {
+        // SAFETY: These are simple version getter functions
+        unsafe {
+            let major = wpe_sys::wpe_fdo_get_major_version();
+            let minor = wpe_sys::wpe_fdo_get_minor_version();
+            let micro = wpe_sys::wpe_fdo_get_micro_version();
+
+            // FDO backend should be version 1.x
+            assert!(major >= 1, "WPE FDO major version should be >= 1, got {}", major);
+            println!("WPE FDO version: {}.{}.{}", major, minor, micro);
+        }
+    }
+
+    #[test]
+    fn test_webview_settings() {
+        let settings = WebViewSettings::new()
+            .with_url("https://example.com")
+            .with_developer_tools(true);
+
+        assert_eq!(settings.url, Some("https://example.com".to_string()));
+        assert!(settings.developer_tools);
+        assert!(settings.javascript_enabled);
+    }
+
+    #[test]
+    fn test_wpe_initialization() {
+        // Test that we can initialize the WPE loader
+        let result = initialize();
+        assert!(result.is_ok(), "WPE initialization should succeed");
+
+        // Calling it again should also succeed (idempotent)
+        let result2 = initialize();
+        assert!(result2.is_ok(), "WPE re-initialization should succeed");
+    }
+}
