@@ -1,0 +1,47 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/wpe-sys",
+    "crates/wpe",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["monokrome <monokrome@monokro.me>"]
+license = "MIT"
+repository = "https://github.com/monokrome/wpe-webkit-rs"
+
+[workspace.dependencies]
+# Sys crate
+wpe-sys = { path = "crates/wpe-sys" }
+
+# Windowing
+winit = "0.30"
+raw-window-handle = "0.6"
+
+# Async
+tokio = { version = "1", features = ["full"] }
+
+# Serialization (for IPC)
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Error handling
+thiserror = "2"
+
+# Logging
+tracing = "0.1"
+
+# Menus
+muda = "0.16"
+
+# Dev dependencies
+tracing-subscriber = "0.3"
+
+[workspace.lints.rust]
+unsafe_code = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }

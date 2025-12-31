@@ -1,0 +1,31 @@
+{
+  "crates/*/src/*.rs": {
+    "type": "source",
+    "alternate": "crates/{}/tests/{}.rs"
+  },
+  "crates/*/tests/*.rs": {
+    "type": "test",
+    "alternate": "crates/{}/src/{}.rs"
+  },
+  "examples/*.rs": {
+    "type": "example"
+  },
+  "crates/wpe-sys/src/lib.rs": {
+    "type": "sys"
+  },
+  "crates/wpe/src/lib.rs": {
+    "type": "lib"
+  },
+  "crates/wpe/src/webview.rs": {
+    "type": "webview"
+  },
+  "crates/wpe/src/window.rs": {
+    "type": "window"
+  },
+  "crates/wpe/src/ipc.rs": {
+    "type": "ipc"
+  },
+  "crates/wpe/src/error.rs": {
+    "type": "error"
+  }
+}

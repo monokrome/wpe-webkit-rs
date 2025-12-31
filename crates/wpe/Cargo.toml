@@ -1,0 +1,34 @@
+[package]
+name = "wpe"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Safe Rust bindings for WPE WebKit - GTK-free embedded web views"
+
+[features]
+default = ["winit"]
+winit = ["dep:winit", "dep:raw-window-handle"]
+
+[dependencies]
+wpe-sys.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+# Optional winit integration
+winit = { workspace = true, optional = true }
+raw-window-handle = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio.workspace = true
+tracing-subscriber.workspace = true
+
+[[example]]
+name = "basic"
+path = "examples/basic.rs"
+
+[lints]
+workspace = true
