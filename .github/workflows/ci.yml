@@ -1,0 +1,145 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  fmt:
+    name: Rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwpe-1.0-dev \
+            libwpewebkit-2.0-dev \
+            libwpebackend-fdo-1.0-dev \
+            libglib2.0-dev \
+            libclang-dev \
+            pkg-config
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --all-targets --all-features -- -D warnings
+
+  build:
+    name: Build (${{ matrix.features }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        features:
+          - default
+          - x11
+          - gpu
+          - ""  # no default features
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwpe-1.0-dev \
+            libwpewebkit-2.0-dev \
+            libwpebackend-fdo-1.0-dev \
+            libglib2.0-dev \
+            libclang-dev \
+            libx11-dev \
+            libxcb1-dev \
+            libxcb-shm0-dev \
+            pkg-config
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.features }}
+      - name: Build (no default features)
+        if: matrix.features == ''
+        run: cargo build --no-default-features
+      - name: Build (default features)
+        if: matrix.features == 'default'
+        run: cargo build
+      - name: Build (with feature)
+        if: matrix.features != '' && matrix.features != 'default'
+        run: cargo build --features ${{ matrix.features }}
+
+  test:
+    name: Test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwpe-1.0-dev \
+            libwpewebkit-2.0-dev \
+            libwpebackend-fdo-1.0-dev \
+            libglib2.0-dev \
+            libclang-dev \
+            libx11-dev \
+            libxcb1-dev \
+            libxcb-shm0-dev \
+            pkg-config
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --all-features
+
+  doc:
+    name: Documentation
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwpe-1.0-dev \
+            libwpewebkit-2.0-dev \
+            libwpebackend-fdo-1.0-dev \
+            libglib2.0-dev \
+            libclang-dev \
+            pkg-config
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo doc --no-deps --all-features
+        env:
+          RUSTDOCFLAGS: -D warnings
+
+  msrv:
+    name: Minimum Supported Rust Version
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.75.0  # MSRV
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwpe-1.0-dev \
+            libwpewebkit-2.0-dev \
+            libwpebackend-fdo-1.0-dev \
+            libglib2.0-dev \
+            libclang-dev \
+            pkg-config
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo check
