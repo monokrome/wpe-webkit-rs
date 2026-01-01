@@ -31,6 +31,12 @@ pub enum Error {
 
     #[error("Window handle error")]
     WindowHandle,
+
+    #[error("X11 error: {0}")]
+    X11Error(String),
+
+    #[error("No display available (neither Wayland nor X11)")]
+    NoDisplay,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

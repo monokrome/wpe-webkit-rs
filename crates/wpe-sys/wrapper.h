@@ -6,11 +6,14 @@
 /* GLib/GObject - needed for memory management */
 #include <glib-object.h>
 
-/* Core libwpe */
-#include <wpe/wpe.h>
+/* WPE Platform API (modern, clean API) */
+#include <wpe/wpe-platform.h>
+
+/* WPE Headless Platform (for offscreen rendering) */
+#include <wpe/headless/wpe-headless.h>
 
 /* WPE WebKit */
 #include <wpe/webkit.h>
 
-/* FDO backend for Wayland/X11 */
-#include <wpe/fdo.h>
+/* JavaScriptCore (for IPC message handling) */
+#include <jsc/jsc.h>

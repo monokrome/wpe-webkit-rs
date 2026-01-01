@@ -21,6 +21,10 @@ winit = "0.30"
 raw-window-handle = "0.6"
 softbuffer = "0.4"
 
+# GPU rendering
+wgpu = "24"
+bytemuck = { version = "1", features = ["derive"] }
+
 # Async
 tokio = { version = "1", features = ["full"] }
 
@@ -36,6 +40,10 @@ tracing = "0.1"
 
 # Menus
 muda = "0.16"
+
+# X11 support
+x11rb = { version = "0.13", features = ["shm"] }
+libc = "0.2"
 
 # Dev dependencies
 tracing-subscriber = "0.3"

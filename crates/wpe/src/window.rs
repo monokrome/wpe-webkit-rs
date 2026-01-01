@@ -11,12 +11,14 @@ use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
 #[cfg(feature = "winit")]
 use winit::{
     application::ApplicationHandler,
-    event::WindowEvent,
+    event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent},
     event_loop::{ActiveEventLoop, EventLoop},
+    keyboard::PhysicalKey,
     window::{Window, WindowAttributes, WindowId},
 };
 
 use crate::{Error, IpcBridge, Result, SoftwareRenderer, WebView, WebViewSettings};
+use crate::renderer::SharedFrameBuffer;
 
 /// A custom event type for the winit event loop.
 #[derive(Debug, Clone)]
@@ -33,9 +35,14 @@ pub struct WpeWindow {
     window: Option<Arc<Window>>,
     webview: Option<WebView>,
     renderer: Option<SoftwareRenderer>,
+    frame_buffer: SharedFrameBuffer,
     ipc: IpcBridge,
     settings: WebViewSettings,
     ready: bool,
+    /// Current cursor position
+    cursor_pos: (f64, f64),
+    /// Current modifier state
+    modifiers: u32,
 }
 
 #[cfg(feature = "winit")]
@@ -47,9 +54,12 @@ impl WpeWindow {
             window: None,
             webview: None,
             renderer: None,
+            frame_buffer: SharedFrameBuffer::new(1280, 720),
             ipc: IpcBridge::new(),
             settings,
             ready: false,
+            cursor_pos: (0.0, 0.0),
+            modifiers: 0,
         }
     }
 
@@ -97,6 +107,8 @@ impl WpeWindow {
 
     /// Initialize the window and webview.
     fn initialize(&mut self, event_loop: &ActiveEventLoop) -> Result<()> {
+        tracing::debug!("WpeWindow::initialize starting");
+
         let attrs = WindowAttributes::default()
             .with_title("WPE WebView")
             .with_inner_size(winit::dpi::LogicalSize::new(1280, 720));
@@ -106,30 +118,38 @@ impl WpeWindow {
                 .create_window(attrs)
                 .map_err(|_| Error::WebViewCreationFailed)?,
         );
+        tracing::debug!("Window created");
 
         // Get the raw window handle for WPE
         let _display_handle = window.display_handle().map_err(|_| Error::WindowHandle)?;
         let _window_handle = window.window_handle().map_err(|_| Error::WindowHandle)?;
+        tracing::debug!("Got window handles");
 
-        // Create the software renderer
-        let renderer = SoftwareRenderer::new(window.clone())?;
+        // Create the software renderer with shared frame buffer
+        let renderer = SoftwareRenderer::new(window.clone(), self.frame_buffer.clone())?;
+        tracing::debug!("Renderer created");
 
-        // Create the webview
-        let mut webview = WebView::new(self.settings.clone())?;
+        // Create the webview with the same shared frame buffer
+        let mut webview = WebView::new(self.settings.clone(), self.frame_buffer.clone())?;
+        tracing::debug!("WebView created");
 
         // Load initial content
         if let Some(ref url) = self.settings.url {
+            tracing::debug!("Loading URL: {}", url);
             webview.load_url(url)?;
         } else if let Some(ref html) = self.settings.html {
+            tracing::debug!("Loading HTML content");
             let html_with_bridge = IpcBridge::inject_bridge(html);
             webview.load_html(&html_with_bridge, None)?;
         }
+        tracing::debug!("Content loaded");
 
         self.window = Some(window);
         self.renderer = Some(renderer);
         self.webview = Some(webview);
         self.ready = true;
 
+        tracing::debug!("WpeWindow::initialize complete");
         Ok(())
     }
 
@@ -140,6 +160,9 @@ impl WpeWindow {
                 return true; // Signal exit
             }
             WindowEvent::Resized(size) => {
+                // Resize shared buffer first (both webview and renderer will see it)
+                self.frame_buffer.resize(size.width, size.height);
+
                 if let Some(ref mut webview) = self.webview {
                     webview.resize(size.width, size.height);
                 }
@@ -148,26 +171,131 @@ impl WpeWindow {
                 }
             }
             WindowEvent::RedrawRequested => {
-                // Process WPE events
+                tracing::trace!("RedrawRequested");
+
+                // Process WPE events and request next frame
                 if let Some(ref mut webview) = self.webview {
+                    tracing::trace!("spin");
                     webview.spin();
+                    tracing::trace!("render");
                     webview.render();
+                    tracing::trace!("render done");
                 }
 
-                // Present the frame
+                // Present directly - no copying needed, buffer is shared
                 if let Some(ref mut renderer) = self.renderer {
-                    // For now, fill with a test color to verify rendering works
-                    // Later this will be replaced with actual WPE buffer content
-                    renderer.fill(0xFF2D2D2D); // Dark gray background
-
+                    tracing::trace!("present");
                     if let Err(e) = renderer.present() {
                         tracing::error!("Failed to present frame: {}", e);
                     }
+                    tracing::trace!("present done");
                 }
 
                 // Request next frame
                 if let Some(ref window) = self.window {
                     window.request_redraw();
+                }
+            }
+            WindowEvent::Focused(focused) => {
+                if let Some(ref mut webview) = self.webview {
+                    if focused {
+                        webview.focus();
+                    } else {
+                        webview.unfocus();
+                    }
+                }
+            }
+            WindowEvent::CursorMoved { position, .. } => {
+                self.cursor_pos = (position.x, position.y);
+                if let Some(ref mut webview) = self.webview {
+                    webview.mouse_move(position.x, position.y, self.modifiers);
+                }
+            }
+            WindowEvent::CursorEntered { .. } => {
+                if let Some(ref mut webview) = self.webview {
+                    webview.mouse_enter(self.cursor_pos.0, self.cursor_pos.1);
+                }
+            }
+            WindowEvent::CursorLeft { .. } => {
+                if let Some(ref mut webview) = self.webview {
+                    webview.mouse_leave();
+                }
+            }
+            WindowEvent::MouseInput { state, button, .. } => {
+                let wpe_button = match button {
+                    MouseButton::Left => 1,
+                    MouseButton::Middle => 2,
+                    MouseButton::Right => 3,
+                    MouseButton::Back => 8,
+                    MouseButton::Forward => 9,
+                    MouseButton::Other(n) => n as u32,
+                };
+                let pressed = state == ElementState::Pressed;
+                if let Some(ref mut webview) = self.webview {
+                    webview.mouse_button(
+                        wpe_button,
+                        pressed,
+                        self.cursor_pos.0,
+                        self.cursor_pos.1,
+                        self.modifiers,
+                        1, // click count - TODO: track double-clicks
+                    );
+                }
+            }
+            WindowEvent::MouseWheel { delta, .. } => {
+                let (dx, dy, precise) = match delta {
+                    MouseScrollDelta::LineDelta(x, y) => {
+                        // Line-based scrolling (mouse wheel) - scale to pixels
+                        (x as f64 * 40.0, y as f64 * 40.0, false)
+                    }
+                    MouseScrollDelta::PixelDelta(pos) => {
+                        (pos.x, pos.y, true)
+                    }
+                };
+                if let Some(ref mut webview) = self.webview {
+                    webview.scroll(
+                        self.cursor_pos.0,
+                        self.cursor_pos.1,
+                        dx,
+                        -dy, // Invert Y for natural scrolling
+                        self.modifiers,
+                        precise,
+                    );
+                }
+            }
+            WindowEvent::KeyboardInput { event, .. } => {
+                if let PhysicalKey::Code(keycode) = event.physical_key {
+                    // Convert winit keycode to Linux keycode
+                    // This is a simplified mapping - full mapping would be more complex
+                    let linux_keycode = keycode as u32;
+                    let pressed = event.state == ElementState::Pressed;
+
+                    // Get keyval from text if available, otherwise use keycode
+                    let keyval = event.text
+                        .as_ref()
+                        .and_then(|s| s.chars().next())
+                        .map(|c| c as u32)
+                        .unwrap_or(linux_keycode);
+
+                    if let Some(ref mut webview) = self.webview {
+                        webview.keyboard(linux_keycode, keyval, pressed, self.modifiers);
+                    }
+                }
+            }
+            WindowEvent::ModifiersChanged(mods) => {
+                let state = mods.state();
+                self.modifiers = 0;
+                if state.control_key() {
+                    self.modifiers |= wpe_sys::WPEModifiers_WPE_MODIFIER_KEYBOARD_CONTROL;
+                }
+                if state.shift_key() {
+                    self.modifiers |= wpe_sys::WPEModifiers_WPE_MODIFIER_KEYBOARD_SHIFT;
+                }
+                if state.alt_key() {
+                    self.modifiers |= wpe_sys::WPEModifiers_WPE_MODIFIER_KEYBOARD_ALT;
+                }
+                if state.super_key() {
+                    self.modifiers |= wpe_sys::WPEModifiers_WPE_MODIFIER_KEYBOARD_META;
                 }
             }
             _ => {}

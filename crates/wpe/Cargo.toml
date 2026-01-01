@@ -10,6 +10,8 @@ description = "Safe Rust bindings for WPE WebKit - GTK-free embedded web views"
 [features]
 default = ["winit"]
 winit = ["dep:winit", "dep:raw-window-handle", "dep:softbuffer"]
+gpu = ["winit", "dep:wgpu", "dep:bytemuck"]
+x11 = ["dep:x11rb", "dep:libc"]
 
 [dependencies]
 wpe-sys.workspace = true
@@ -23,6 +25,14 @@ winit = { workspace = true, optional = true }
 raw-window-handle = { workspace = true, optional = true }
 softbuffer = { workspace = true, optional = true }
 
+# Optional GPU rendering
+wgpu = { workspace = true, optional = true }
+bytemuck = { workspace = true, optional = true }
+
+# Optional X11 fallback
+x11rb = { workspace = true, optional = true }
+libc = { workspace = true, optional = true }
+
 [dev-dependencies]
 tokio.workspace = true
 tracing-subscriber.workspace = true
@@ -30,6 +40,11 @@ tracing-subscriber.workspace = true
 [[example]]
 name = "basic"
 path = "examples/basic.rs"
+
+[[example]]
+name = "native"
+path = "examples/native.rs"
+required-features = []
 
 [lints]
 workspace = true

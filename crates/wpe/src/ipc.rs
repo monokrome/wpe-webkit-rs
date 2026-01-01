@@ -4,33 +4,37 @@ use std::collections::VecDeque;
 use crate::{Result, WebView};
 
 /// JavaScript bridge code injected into web pages.
+///
+/// This bridge supports two modes:
+/// 1. WebKit native message handler (preferred, uses webkit.messageHandlers.wpe)
+/// 2. Fetch-based fallback (uses wpe://message endpoint)
 pub const JS_BRIDGE: &str = r#"
 (function() {
     'use strict';
 
-    // Message queue for outgoing messages
-    const pendingMessages = [];
+    // Check if WebKit message handler is available
+    const hasWebKitHandler = typeof webkit !== 'undefined' &&
+                             webkit.messageHandlers &&
+                             webkit.messageHandlers.wpe;
 
     // Receive message from Rust
     window.__wpe_receive = function(msg) {
         window.dispatchEvent(new CustomEvent('wpe:message', { detail: msg }));
     };
 
-    // Send message to Rust (via custom URI scheme)
+    // Send message to Rust
     window.__wpe_send = function(msg) {
-        pendingMessages.push(msg);
-        // Trigger fetch to custom endpoint that Rust intercepts
-        fetch('wpe://message', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(msg)
-        }).catch(() => {});
-    };
-
-    // Poll pending messages (called by Rust)
-    window.__wpe_poll = function() {
-        const msgs = pendingMessages.splice(0);
-        return JSON.stringify(msgs);
+        if (hasWebKitHandler) {
+            // Use WebKit native message handler (preferred)
+            webkit.messageHandlers.wpe.postMessage(JSON.stringify(msg));
+        } else {
+            // Fallback to fetch-based approach
+            fetch('wpe://message', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(msg)
+            }).catch(() => {});
+        }
     };
 
     // Public API
@@ -66,6 +70,11 @@ pub const JS_BRIDGE: &str = r#"
                     reject(new Error('Request timeout'));
                 }, 30000);
             });
+        },
+
+        // Check if native handler is available
+        hasNativeHandler() {
+            return hasWebKitHandler;
         }
     };
 
@@ -233,4 +242,78 @@ pub trait MessageHandler {
 
     /// Handle the message and return a response.
     fn handle(&self, payload: serde_json::Value) -> Result<serde_json::Value>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_frontend_message_deserialize() {
+        let json = r#"{"type":"ping","payload":{"value":42}}"#;
+        let msg: FrontendMessage = serde_json::from_str(json).unwrap();
+        assert_eq!(msg.message_type, "ping");
+        assert_eq!(msg.payload["value"], 42);
+        assert!(msg.request_id.is_none());
+    }
+
+    #[test]
+    fn test_frontend_message_with_request_id() {
+        let json = r#"{"type":"call","payload":{},"_requestId":"abc123"}"#;
+        let msg: FrontendMessage = serde_json::from_str(json).unwrap();
+        assert_eq!(msg.message_type, "call");
+        assert_eq!(msg.request_id, Some("abc123".to_string()));
+    }
+
+    #[test]
+    fn test_backend_message_new() {
+        let msg = BackendMessage::new("event", serde_json::json!({"data": "test"}));
+        assert_eq!(msg.message_type, "event");
+        assert_eq!(msg.payload["data"], "test");
+        assert!(msg.response_id.is_none());
+        assert!(msg.result.is_none());
+        assert!(msg.error.is_none());
+    }
+
+    #[test]
+    fn test_backend_message_response() {
+        let msg = BackendMessage::response("req123".to_string(), serde_json::json!({"ok": true}));
+        assert_eq!(msg.message_type, "response");
+        assert_eq!(msg.response_id, Some("req123".to_string()));
+        assert!(msg.result.is_some());
+        assert!(msg.error.is_none());
+    }
+
+    #[test]
+    fn test_backend_message_error_response() {
+        let msg = BackendMessage::error_response("req456".to_string(), "Something failed");
+        assert_eq!(msg.message_type, "response");
+        assert_eq!(msg.response_id, Some("req456".to_string()));
+        assert!(msg.result.is_none());
+        assert_eq!(msg.error, Some("Something failed".to_string()));
+    }
+
+    #[test]
+    fn test_backend_message_serialize() {
+        let msg = BackendMessage::new("notify", serde_json::json!({"count": 5}));
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains(r#""type":"notify""#));
+        assert!(json.contains(r#""count":5"#));
+    }
+
+    #[test]
+    fn test_ipc_bridge_inject() {
+        let html = "<html><body>Hello</body></html>";
+        let result = IpcBridge::inject_bridge(html);
+        assert!(result.contains("<html><body>Hello</body></html>"));
+        assert!(result.contains("<script>"));
+        assert!(result.contains("window.wpe"));
+    }
+
+    #[test]
+    fn test_ipc_bridge_new() {
+        let bridge = IpcBridge::new();
+        // Just verify it creates without panicking
+        assert_eq!(IpcBridge::js_bridge_code().len() > 0, true);
+    }
 }

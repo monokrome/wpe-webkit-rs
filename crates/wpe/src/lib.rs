@@ -38,8 +38,13 @@
 //! ```
 
 pub mod error;
+pub mod input;
 pub mod ipc;
+pub mod native;
 pub mod webview;
+
+#[cfg(feature = "x11")]
+pub mod x11_window;
 
 #[cfg(feature = "winit")]
 pub mod renderer;
@@ -48,9 +53,18 @@ pub mod window;
 
 pub use error::{Error, Result};
 pub use ipc::{BackendMessage, FrontendMessage, IpcBridge};
+pub use native::{LoadState, NativeWindow, NavigationEvent};
+
+#[cfg(feature = "x11")]
+pub use x11_window::X11Window;
 pub use webview::{initialize, WebView, WebViewSettings};
 
 #[cfg(feature = "winit")]
-pub use renderer::{RenderContext, SoftwareRenderer};
+pub use renderer::SharedFrameBuffer;
+
+#[cfg(feature = "winit")]
+pub use renderer::SoftwareRenderer;
+#[cfg(feature = "gpu")]
+pub use renderer::GpuRenderer;
 #[cfg(feature = "winit")]
 pub use window::{WpeApp, WpeEvent, WpeWindow};
