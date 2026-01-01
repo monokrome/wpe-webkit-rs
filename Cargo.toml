@@ -22,7 +22,7 @@ raw-window-handle = "0.6"
 softbuffer = "0.4"
 
 # GPU rendering
-wgpu = "24"
+wgpu = "28"
 bytemuck = { version = "1", features = ["derive"] }
 
 # Async
